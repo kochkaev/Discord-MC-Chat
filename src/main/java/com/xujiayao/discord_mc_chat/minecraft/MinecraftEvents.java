@@ -2,10 +2,10 @@ package com.xujiayao.discord_mc_chat.minecraft;
 
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
-import net.minecraft.advancements.AdvancementHolder;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.advancement.AdvancementEntry;
+import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 
 import java.util.Optional;
 
@@ -21,7 +21,7 @@ public interface MinecraftEvents {
 	});
 
 	Event<PlayerMessage> PLAYER_MESSAGE = EventFactory.createArrayBacked(PlayerMessage.class, callbacks -> (player, message) -> {
-		Optional<Component> result = Optional.empty();
+		Optional<Text> result = Optional.empty();
 		for (PlayerMessage callback : callbacks) {
 			result = callback.message(player, message);
 		}
@@ -59,31 +59,31 @@ public interface MinecraftEvents {
 	});
 
 	interface CommandMessage {
-		void message(String message, CommandSourceStack commandSourceStack);
+		void message(String message, ServerCommandSource commandSourceStack);
 	}
 
 	interface PlayerMessage {
-		Optional<Component> message(ServerPlayer player, String message);
+		Optional<Text> message(ServerPlayerEntity player, String message);
 	}
 
 	interface PlayerCommand {
-		void command(ServerPlayer player, String command);
+		void command(ServerPlayerEntity player, String command);
 	}
 
 
 	interface PlayerAdvancement {
-		void advancement(ServerPlayer player, AdvancementHolder advancementHolder, boolean isDone);
+		void advancement(ServerPlayerEntity player, AdvancementEntry advancementHolder, boolean isDone);
 	}
 
 	interface PlayerDie {
-		void die(ServerPlayer player);
+		void die(ServerPlayerEntity player);
 	}
 
 	interface PlayerJoin {
-		void join(ServerPlayer player);
+		void join(ServerPlayerEntity player);
 	}
 
 	interface PlayerQuit {
-		void quit(ServerPlayer player);
+		void quit(ServerPlayerEntity player);
 	}
 }

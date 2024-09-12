@@ -1,19 +1,16 @@
 package com.xujiayao.discord_mc_chat.discord;
 
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
-import net.minecraft.commands.CommandSource;
-import net.minecraft.network.chat.Component;
+import net.minecraft.server.command.CommandOutput;
+import net.minecraft.text.Text;
 
-//#if MC < 11900
-//$$ import java.util.UUID;
-//#endif
 import java.util.Timer;
 import java.util.TimerTask;
 
 /**
  * @author Xujiayao
  */
-public class DiscordCommandSource implements CommandSource {
+public class DiscordCommandSource implements CommandOutput {
 
 	private final SlashCommandInteractionEvent e;
 	private StringBuilder output = new StringBuilder("```\n");
@@ -24,13 +21,7 @@ public class DiscordCommandSource implements CommandSource {
 	}
 
 	@Override
-	//#if MC >= 11900
-	public void sendSystemMessage(Component message) {
-	//#elseif MC > 11502
-	//$$ public void sendMessage(Component message, UUID uUID) {
-	//#else
-	//$$ public void sendMessage(Component message) {
-	//#endif
+	public void sendMessage(Text message) {
 		long currentOutputMillis = System.currentTimeMillis();
 
 		if (output.length() > 1500) {
@@ -56,17 +47,17 @@ public class DiscordCommandSource implements CommandSource {
 	}
 
 	@Override
-	public boolean acceptsSuccess() {
+	public boolean shouldReceiveFeedback() {
 		return true;
 	}
 
 	@Override
-	public boolean acceptsFailure() {
+	public boolean shouldTrackOutput() {
 		return true;
 	}
 
 	@Override
-	public boolean shouldInformAdmins() {
+	public boolean shouldBroadcastConsoleToOps() {
 		return true;
 	}
 }

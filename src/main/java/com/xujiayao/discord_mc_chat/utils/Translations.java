@@ -3,13 +3,11 @@ package com.xujiayao.discord_mc_chat.utils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.DetectedVersion;
-import net.minecraft.locale.Language;
-import net.minecraft.network.chat.Component;
-//#if MC >= 11900
-import net.minecraft.network.chat.ComponentContents;
-//#endif
-import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.SharedConstants;
+import net.minecraft.util.Language;
+import net.minecraft.text.Text;
+import net.minecraft.text.TextContent;
+import net.minecraft.text.TranslatableTextContent;
 import okhttp3.CacheControl;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -53,7 +51,7 @@ public class Translations {
 			LOGGER.warn("Contributing: https://github.com/Xujiayao/Discord-MC-Chat#Contributing");
 			LOGGER.warn("-----------------------------------------");
 
-			optional = FabricLoader.getInstance().getModContainer("discord-mc-chat").orElseThrow()
+			optional = FabricLoader.getInstance().getModContainer("discord-mc-chat-extended").orElseThrow()
 					.findPath("/lang/en_us.json");
 		}
 
@@ -63,16 +61,16 @@ public class Translations {
 				translations.putAll(new Gson().fromJson(dmccLang, new TypeToken<Map<String, String>>() {
 				}.getType()));
 
-				File langFolder = new File(FabricLoader.getInstance().getConfigDir().toFile(), "/discord-mc-chat/");
+				File langFolder = new File(FabricLoader.getInstance().getConfigDir().toFile(), "/discord-mc-chat-extended/");
 				if (!(langFolder.mkdirs() || langFolder.isDirectory())) {
 					return;
 				}
 
-				File minecraftLangFile = new File(FabricLoader.getInstance().getConfigDir().toFile(), "/discord-mc-chat/" + DetectedVersion.tryDetectVersion().getName() + "-" + CONFIG.generic.language + ".json");
+				File minecraftLangFile = new File(FabricLoader.getInstance().getConfigDir().toFile(), "/discord-mc-chat-extended/" + SharedConstants.getGameVersion().getName() + "-" + CONFIG.generic.language + ".json");
 
 				if (minecraftLangFile.length() == 0) {
 					Request request1 = new Request.Builder()
-							.url("https://cdn.jsdelivr.net/gh/InventivetalentDev/minecraft-assets@" + DetectedVersion.tryDetectVersion().getName() + "/assets/minecraft/lang/" + CONFIG.generic.language + ".json")
+							.url("https://cdn.jsdelivr.net/gh/InventivetalentDev/minecraft-assets@" + SharedConstants.getGameVersion().getName() + "/assets/minecraft/lang/" + CONFIG.generic.language + ".json")
 							.cacheControl(CacheControl.FORCE_NETWORK)
 							.build();
 
@@ -82,7 +80,7 @@ public class Translations {
 							sink.writeAll(response1.body().source());
 							sink.close();
 						} else if (response1.code() == 404) {
-							minecraftLangFile = new File(FabricLoader.getInstance().getConfigDir().toFile(), "/discord-mc-chat/latest-" + CONFIG.generic.language + ".json");
+							minecraftLangFile = new File(FabricLoader.getInstance().getConfigDir().toFile(), "/discord-mc-chat-extended/latest-" + CONFIG.generic.language + ".json");
 
 							Request request2 = new Request.Builder()
 									.url("https://cdn.jsdelivr.net/gh/InventivetalentDev/minecraft-assets@latest/assets/minecraft/lang/" + CONFIG.generic.language + ".json")
@@ -112,15 +110,10 @@ public class Translations {
 	public static String translate(String key, Object... args) {
 		for (int i = 0; i < args.length; i++) {
 			Object object = args[i];
-			if (object instanceof Component component) {
-				//#if MC >= 11900
-				ComponentContents componentContents = component.getContents();
-				if (componentContents instanceof TranslatableContents translatable) {
+			if (object instanceof Text component) {
+				TextContent componentContents = component.getContent();
+				if (componentContents instanceof TranslatableTextContent translatable) {
 					args[i] = translate(translatable.getKey(), translatable.getArgs());
-				//#else
-				//$$ if (component instanceof TranslatableComponent translatable) {
-				//$$ 	args[i] = translate(translatable.getKey(), translatable.getArgs());
-				//#endif
 				} else {
 					args[i] = component.getString();
 				}
@@ -133,7 +126,7 @@ public class Translations {
 		if (translation1 != null) {
 			return String.format(translation1, args);
 		} else {
-			String translation2 = Language.getInstance().getOrDefault(key);
+			String translation2 = Language.getInstance().get(key);
 			if (!translation2.equals(key)) {
 				return String.format(translation2, args);
 			} else {

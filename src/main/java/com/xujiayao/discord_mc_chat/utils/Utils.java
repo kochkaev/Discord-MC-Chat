@@ -16,22 +16,16 @@ import net.dv8tion.jda.api.exceptions.InsufficientPermissionException;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.DetectedVersion;
-//#if MC >= 12005
-import net.minecraft.core.RegistryAccess;
-//#endif
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-//#if MC > 12002
-import net.minecraft.server.ServerTickRateManager;
-//#endif
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.UserWhiteList;
-import net.minecraft.server.players.UserWhiteListEntry;
-//#if MC > 11502
-import net.minecraft.util.TimeUtil;
-//#endif
-import net.minecraft.util.Tuple;
+import net.minecraft.SharedConstants;
+import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.server.ServerTickManager;
+import net.minecraft.server.Whitelist;
+import net.minecraft.server.WhitelistEntry;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Pair;
+import net.minecraft.util.TimeHelper;
 import okhttp3.CacheControl;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -119,7 +113,7 @@ public class Utils {
 			try (Response response = HTTP_CLIENT.newCall(request).execute()) {
 				String result = Objects.requireNonNull(response.body()).string();
 
-				String minecraftVersion = DetectedVersion.tryDetectVersion().getName();
+				String minecraftVersion = SharedConstants.getGameVersion().getName();
 
 				String latestVersion = "";
 				String latestChangelog = "";
@@ -230,7 +224,7 @@ public class Utils {
 	}
 
 	public static String whitelist(String player) {
-		UserWhiteList whitelist = SERVER.getPlayerList().getWhiteList();
+		Whitelist whitelist = SERVER.getPlayerManager().getWhitelist();
 
 		Request request = new Request.Builder()
 				.url("https://api.mojang.com/users/profiles/minecraft/" + player)
@@ -245,10 +239,10 @@ public class Utils {
 				String name = json.get("name").getAsString();
 
 				GameProfile profile = new GameProfile(uuid, name);
-				if (whitelist.isWhiteListed(profile)) {
+				if (whitelist.isAllowed(profile)) {
 					return Translations.translate("utils.utils.whitelist.whitelistFailed");
 				} else {
-					whitelist.add(new UserWhiteListEntry(profile));
+					whitelist.add(new WhitelistEntry(profile));
 					return Translations.translate("utils.utils.whitelist.whitelistSuccess", name);
 				}
 			} else if (response.code() == 404) {
@@ -440,26 +434,22 @@ public class Utils {
 				.append(" ===============\n\n");
 
 		// Online players
-		List<ServerPlayer> onlinePlayers = SERVER.getPlayerList().getPlayers();
-		message.append(Translations.translate("utils.utils.gicMessage.onlinePlayers", onlinePlayers.size(), SERVER.getMaxPlayers()));
+		List<ServerPlayerEntity> onlinePlayers = SERVER.getPlayerManager().getPlayerList();
+		message.append(Translations.translate("utils.utils.gicMessage.onlinePlayers", onlinePlayers.size(), SERVER.getMaxPlayerCount()));
 
 		if (onlinePlayers.isEmpty()) {
 			message.append(Translations.translate("utils.utils.gicMessage.noPlayersOnline"));
 		} else {
-			for (ServerPlayer player : onlinePlayers) {
-				//#if MC >= 12002
-				message.append("[").append(player.connection.latency()).append("ms] ").append(Objects.requireNonNull(player.getDisplayName()).getString()).append("\n");
-				//#else
-				//$$ message.append("[").append(player.latency).append("ms] ").append(Objects.requireNonNull(player.getDisplayName()).getString()).append("\n");
-				//#endif
+			for (ServerPlayerEntity player : onlinePlayers) {
+				message.append("[").append(player.networkHandler.getLatency()).append("ms] ").append(Objects.requireNonNull(player.getDisplayName()).getString()).append("\n");
 			}
 		}
 
 		// Server TPS
-		message.append(Translations.translate("utils.utils.gicMessage.serverTps", String.format("%.2f", getTickInfo().getA())));
+		message.append(Translations.translate("utils.utils.gicMessage.serverTps", String.format("%.2f", getTickInfo().getLeft())));
 
 		// Server MSPT
-		message.append(Translations.translate("utils.utils.gicMessage.serverMspt", String.format("%.2f", getTickInfo().getB())));
+		message.append(Translations.translate("utils.utils.gicMessage.serverMspt", String.format("%.2f", getTickInfo().getRight())));
 
 		// Server used memory
 		message.append(Translations.translate("utils.utils.gicMessage.serverUsedMemory", (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024, Runtime.getRuntime().totalMemory() / 1024 / 1024));
@@ -532,7 +522,7 @@ public class Utils {
 			return;
 		}
 
-		if (CONFIG.generic.showServerStatusInBotStatus && SERVER.getPlayerCount() == 0) {
+		if (CONFIG.generic.showServerStatusInBotStatus && SERVER.getCurrentPlayerCount() == 0) {
 			JDA.getPresence().setStatus(OnlineStatus.IDLE);
 		} else {
 			JDA.getPresence().setStatus(OnlineStatus.ONLINE);
@@ -540,12 +530,12 @@ public class Utils {
 
 		if (!CONFIG.generic.botPlayingActivity.isEmpty()) {
 			JDA.getPresence().setActivity(Activity.playing(CONFIG.generic.botPlayingActivity
-					.replace("%onlinePlayerCount%", Integer.toString(SERVER.getPlayerCount()))
-					.replace("%maxPlayerCount%", Integer.toString(SERVER.getMaxPlayers()))));
+					.replace("%onlinePlayerCount%", Integer.toString(SERVER.getCurrentPlayerCount()))
+					.replace("%maxPlayerCount%", Integer.toString(SERVER.getMaxPlayerCount()))));
 		} else if (!CONFIG.generic.botListeningActivity.isEmpty()) {
 			JDA.getPresence().setActivity(Activity.listening(CONFIG.generic.botListeningActivity
-					.replace("%onlinePlayerCount%", Integer.toString(SERVER.getPlayerCount()))
-					.replace("%maxPlayerCount%", Integer.toString(SERVER.getMaxPlayers()))));
+					.replace("%onlinePlayerCount%", Integer.toString(SERVER.getCurrentPlayerCount()))
+					.replace("%maxPlayerCount%", Integer.toString(SERVER.getMaxPlayerCount()))));
 		} else {
 			JDA.getPresence().setActivity(null);
 		}
@@ -574,7 +564,7 @@ public class Utils {
 		MSPT_MONITOR_TIMER.schedule(new TimerTask() {
 			@Override
 			public void run() {
-				double mspt = getTickInfo().getB();
+				double mspt = getTickInfo().getRight();
 
 				if (mspt > CONFIG.generic.msptLimit) {
 					String message = Translations.translateMessage("message.highMspt")
@@ -607,8 +597,8 @@ public class Utils {
 					}
 
 					String topic = Translations.translateMessage("message.onlineChannelTopic")
-							.replace("%onlinePlayerCount%", Integer.toString(SERVER.getPlayerCount()))
-							.replace("%maxPlayerCount%", Integer.toString(SERVER.getMaxPlayers()))
+							.replace("%onlinePlayerCount%", Integer.toString(SERVER.getCurrentPlayerCount()))
+							.replace("%maxPlayerCount%", Integer.toString(SERVER.getMaxPlayerCount()))
 							.replace("%uniquePlayerCount%", Integer.toString(uniquePlayerCount))
 							.replace("%serverStartedTime%", SERVER_STARTED_TIME)
 							.replace("%lastUpdateTime%", Long.toString(epochSecond))
@@ -643,30 +633,20 @@ public class Utils {
 		}, 0, 21600000);
 	}
 
-	private static Tuple<Double, Double> getTickInfo() {
-		//#if MC > 12002
-		ServerTickRateManager manager = SERVER.tickRateManager();
+	private static Pair<Double, Double> getTickInfo() {
+		ServerTickManager manager = SERVER.getTickManager();
 
-		double mspt = ((double) SERVER.getAverageTickTimeNanos()) / TimeUtil.NANOSECONDS_PER_MILLISECOND;
+		double mspt = ((double) SERVER.getAverageTickTime()) / TimeHelper.MILLI_IN_NANOS;
 
-		double tps = 1000.0D / Math.max(manager.isSprinting() ? 0.0 : manager.millisecondsPerTick(), mspt);
+		double tps = 1000.0D / Math.max(manager.isSprinting() ? 0.0 : manager.getMillisPerTick(), mspt);
 		if (manager.isFrozen()) {
 			tps = 0;
 		}
-		//#else
-		//$$ // TODO Compat TPS & MSPT (Issue #217)
-		//$$ double mspt = SERVER.getAverageTickTime();
-		//$$ double tps = Math.min(1000.0 / mspt, 20);
-		//#endif
 
-		return new Tuple<>(tps, mspt);
+		return new Pair<>(tps, mspt);
 	}
 
-	public static MutableComponent fromJson(String json) {
-		//#if MC >= 12005
-		return Component.Serializer.fromJson(json, RegistryAccess.EMPTY);
-		//#else
-		//$$ return Component.Serializer.fromJson(json);
-		//#endif
+	public static MutableText fromJson(String json) {
+		return Text.Serialization.fromJson(json, DynamicRegistryManager.EMPTY);
 	}
 }

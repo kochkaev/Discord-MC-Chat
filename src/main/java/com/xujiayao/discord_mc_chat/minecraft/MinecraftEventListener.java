@@ -10,19 +10,13 @@ import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.emoji.RichCustomEmoji;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.fellbaum.jemoji.EmojiManager;
-import net.minecraft.ChatFormatting;
-import net.minecraft.advancements.DisplayInfo;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-//#if MC < 11900
-//$$ import net.minecraft.network.chat.TextComponent;
-//#endif
-import net.minecraft.network.chat.contents.TranslatableContents;
-//#if MC <= 11802
-//$$ import net.minecraft.server.level.ServerPlayer;
-//#endif
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.advancement.AdvancementDisplay;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.text.TranslatableTextContent;
+import net.minecraft.util.Formatting;
+import net.minecraft.world.GameRules;
 import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -62,7 +56,7 @@ public class MinecraftEventListener {
 
 			// TODO May directly link to PLAYER_MESSAGE
 			//#if MC > 11802
-			if (commandSourceStack.isPlayer()) {
+			if (commandSourceStack.isExecutedByPlayer()) {
 				avatarUrl = getAvatarUrl(commandSourceStack.getPlayer());
 			//#else
 			//$$ if (commandSourceStack.getEntity() instanceof ServerPlayer) {
@@ -88,9 +82,9 @@ public class MinecraftEventListener {
 					List<RichCustomEmoji> emojis = JDA.getEmojisByName(emojiName, true);
 					if (!emojis.isEmpty()) {
 						contentToDiscord = StringUtils.replaceIgnoreCase(contentToDiscord, (":" + emojiName + ":"), emojis.getFirst().getAsMention());
-						contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, (":" + emojiName + ":"), (ChatFormatting.YELLOW + ":" + MarkdownSanitizer.escape(emojiName) + ":" + ChatFormatting.RESET));
+						contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, (":" + emojiName + ":"), (Formatting.YELLOW + ":" + MarkdownSanitizer.escape(emojiName) + ":" + Formatting.RESET));
 					} else if (EmojiManager.getByAlias(emojiName).isPresent()) {
-						contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, (":" + emojiName + ":"), (ChatFormatting.YELLOW + ":" + MarkdownSanitizer.escape(emojiName) + ":" + ChatFormatting.RESET));
+						contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, (":" + emojiName + ":"), (Formatting.YELLOW + ":" + MarkdownSanitizer.escape(emojiName) + ":" + Formatting.RESET));
 					}
 				}
 			}
@@ -100,7 +94,7 @@ public class MinecraftEventListener {
 					for (Member member : CHANNEL.getMembers()) {
 						String usernameMention = "@" + member.getUser().getName();
 						String displayNameMention = "@" + member.getUser().getEffectiveName();
-						String formattedMention = ChatFormatting.YELLOW + "@" + member.getEffectiveName() + ChatFormatting.RESET;
+						String formattedMention = Formatting.YELLOW + "@" + member.getEffectiveName() + Formatting.RESET;
 
 						contentToDiscord = StringUtils.replaceIgnoreCase(contentToDiscord, usernameMention, member.getAsMention());
 						contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, usernameMention, MarkdownSanitizer.escape(formattedMention));
@@ -119,15 +113,15 @@ public class MinecraftEventListener {
 				if (CONFIG.generic.allowedMentions.contains("roles")) {
 					for (Role role : CHANNEL.getGuild().getRoles()) {
 						String roleMention = "@" + role.getName();
-						String formattedMention = ChatFormatting.YELLOW + "@" + role.getName() + ChatFormatting.RESET;
+						String formattedMention = Formatting.YELLOW + "@" + role.getName() + Formatting.RESET;
 						contentToDiscord = StringUtils.replaceIgnoreCase(contentToDiscord, roleMention, role.getAsMention());
 						contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, roleMention, MarkdownSanitizer.escape(formattedMention));
 					}
 				}
 
 				if (CONFIG.generic.allowedMentions.contains("everyone")) {
-					contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, "@everyone", ChatFormatting.YELLOW + "@everyone" + ChatFormatting.RESET);
-					contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, "@here", ChatFormatting.YELLOW + "@here" + ChatFormatting.RESET);
+					contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, "@everyone", Formatting.YELLOW + "@everyone" + Formatting.RESET);
+					contentToMinecraft = StringUtils.replaceIgnoreCase(contentToMinecraft, "@here", Formatting.YELLOW + "@here" + Formatting.RESET);
 				}
 			}
 
@@ -201,21 +195,11 @@ public class MinecraftEventListener {
 
 				MINECRAFT_SEND_COUNT++;
 				if (MINECRAFT_SEND_COUNT <= 20) {
-					//#if MC >= 11900
-					MutableComponent message = Component.literal("<" + Objects.requireNonNull(player.getDisplayName()).getString() + "> " + command);
-					//#else
-					//$$ MutableComponent message = new TextComponent("<" + Objects.requireNonNull(player.getDisplayName()).getString() + "> " + command);
-					//#endif
+					MutableText message = Text.literal("<" + Objects.requireNonNull(player.getDisplayName()).getString() + "> " + command);
 
-					SERVER.getPlayerList().getPlayers().forEach(
-							player1 -> player1.displayClientMessage(message, false));
-					//#if MC >= 11900
-					SERVER.sendSystemMessage(message);
-					//#elseif MC > 11502
-					//$$ SERVER.sendMessage(message, player.getUUID());
-					//#else
-					//$$ SERVER.sendMessage(message);
-					//#endif
+					SERVER.getPlayerManager().getPlayerList().forEach(
+							player1 -> player1.sendMessage(message, false));
+					SERVER.sendMessage(message);
 
 					sendDiscordMessage(MarkdownSanitizer.escape(command), Objects.requireNonNull(player.getDisplayName()).getString(), getAvatarUrl(player));
 					if (CONFIG.multiServer.enable) {
@@ -230,7 +214,7 @@ public class MinecraftEventListener {
 			if (advancementHolder.value().display().isEmpty()) {
 				return;
 			}
-			DisplayInfo display = advancementHolder.value().display().get();
+			AdvancementDisplay display = advancementHolder.value().display().get();
 			//#else
 			//$$ if (advancementHolder.getDisplay() == null) {
 			//$$ 	return;
@@ -240,11 +224,11 @@ public class MinecraftEventListener {
 
 			if (CONFIG.generic.announceAdvancements
 					&& isDone
-					&& display.shouldAnnounceChat()
-					&& player.level().getGameRules().getBoolean(GameRules.RULE_ANNOUNCE_ADVANCEMENTS)) {
+					&& display.shouldAnnounceToChat()
+					&& player.getWorld().getGameRules().getBoolean(GameRules.ANNOUNCE_ADVANCEMENTS)) {
 				String message = "null";
 
-				switch (display.getType()) {
+				switch (display.getFrame()) {
 					case GOAL -> message = Translations.translateMessage("message.advancementGoal");
 					case TASK -> message = Translations.translateMessage("message.advancementTask");
 					case CHALLENGE -> message = Translations.translateMessage("message.advancementChallenge");
@@ -268,9 +252,9 @@ public class MinecraftEventListener {
 		MinecraftEvents.PLAYER_DIE.register(player -> {
 			if (CONFIG.generic.announceDeathMessages) {
 				//#if MC >= 11900
-				TranslatableContents deathMessage = (TranslatableContents) player.getCombatTracker().getDeathMessage().getContents();
+				TranslatableTextContent deathMessage = (TranslatableTextContent) player.getDamageTracker().getDeathMessage().getContent();
 				//#else
-				//$$ TranslatableComponent deathMessage = (TranslatableComponent) player.getCombatTracker().getDeathMessage();
+				//$$ TranslatableText deathMessage = (TranslatableText) player.getCombatTracker().getDeathMessage();
 				//#endif
 				String key = deathMessage.getKey();
 
@@ -359,7 +343,7 @@ public class MinecraftEventListener {
 
 	// {player_name} conflicts with nickname-changing mods
 	// TODO Move to Placeholder class
-	private static String getAvatarUrl(Player player) {
+	private static String getAvatarUrl(PlayerEntity player) {
 		String hash = "null";
 		if (CONFIG.generic.avatarApi.contains("{player_textures}")) {
 			try {
@@ -378,7 +362,7 @@ public class MinecraftEventListener {
 		}
 
 		return CONFIG.generic.avatarApi
-				.replace("{player_uuid}", player.getUUID().toString())
+				.replace("{player_uuid}", player.getUuidAsString())
 				.replace("{player_name}", player.getName().getString())
 				.replace("{player_textures}", hash);
 	}

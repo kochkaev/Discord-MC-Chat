@@ -48,14 +48,10 @@ import java.util.Timer;
 public class Main implements DedicatedServerModInitializer {
 
 	public static final OkHttpClient HTTP_CLIENT = new OkHttpClient();
-	//#if MC >= 11700
-	public static final Logger LOGGER = LoggerFactory.getLogger("Discord-MC-Chat");
-	//#else
-	//$$ public static final Logger LOGGER = LogManager.getLogger("Discord-MC-Chat");
-	//#endif
-	public static final File CONFIG_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "discord-mc-chat.json");
-	public static final File CONFIG_BACKUP_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "discord-mc-chat-backup.json");
-	public static final String VERSION = FabricLoader.getInstance().getModContainer("discord-mc-chat").orElseThrow().getMetadata().getVersion().getFriendlyString();
+	public static final Logger LOGGER = LoggerFactory.getLogger("Discord-MC-Chat Extended");
+	public static final File CONFIG_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "discord-mc-chat-extended.json");
+	public static final File CONFIG_BACKUP_FILE = new File(FabricLoader.getInstance().getConfigDir().toFile(), "discord-mc-chat-extended-backup.json");
+	public static final String VERSION = FabricLoader.getInstance().getModContainer("discord-mc-chat-extended").orElseThrow().getMetadata().getVersion().getFriendlyString();
 	public static Config CONFIG;
 	public static JDA JDA;
 	public static TextChannel CHANNEL;
@@ -79,8 +75,9 @@ public class Main implements DedicatedServerModInitializer {
 			Translations.init();
 
 			LOGGER.info("-----------------------------------------");
-			LOGGER.info("Discord-MC-Chat (DMCC) " + VERSION);
+			LOGGER.info("Discord-MC-Chat (DMCC) Extended " + VERSION);
 			LOGGER.info("By Xujiayao");
+			LOGGER.info("Extended by kochkaev");
 			LOGGER.info("");
 			LOGGER.info("More information + Docs:");
 			LOGGER.info("https://blog.xujiayao.com/posts/4ba0a17a/");

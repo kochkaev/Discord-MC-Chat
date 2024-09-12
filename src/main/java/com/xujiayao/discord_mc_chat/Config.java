@@ -15,6 +15,7 @@ public class Config {
 	public Generic generic = new Generic();
 	public MultiServer multiServer = new MultiServer();
 	public CustomMessage customMessage = new CustomMessage();
+	public Extended extended = new Extended();
 
 	public String latestVersion = VERSION;
 	public long latestCheckTime = 0;
@@ -109,6 +110,11 @@ public class Config {
 		public String offlineChannelTopic = "";
 		public String onlineChannelTopic = "";
 		public String onlineChannelTopicForMultiServer = "";
+	}
+
+	@SuppressWarnings("unused")
+	public static class Extended {
+
 	}
 }
 

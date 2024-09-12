@@ -21,21 +21,13 @@ import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fellbaum.jemoji.EmojiManager;
-import net.minecraft.ChatFormatting;
-import net.minecraft.commands.CommandSourceStack;
-//#if MC >= 12005
-import net.minecraft.core.RegistryAccess;
-//#endif
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-//#if MC < 11900
-//$$ import net.minecraft.network.chat.TextComponent;
-//#endif
-//#if MC <= 11502
-//$$ import net.minecraft.world.level.dimension.DimensionType;
-//#endif
-import net.minecraft.world.phys.Vec2;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import net.minecraft.util.math.Vec2f;
+import net.minecraft.util.math.Vec3d;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -93,7 +85,7 @@ public class DiscordEventListener extends ListenerAdapter {
 						.replace("%command%", e.getCommandString())));
 
 		if (CONFIG.generic.broadcastSlashCommandExecution) {
-			MutableComponent commandNoticeText = Utils.fromJson(Translations.translateMessage("message.formattedOtherMessage")
+			MutableText commandNoticeText = Utils.fromJson(Translations.translateMessage("message.formattedOtherMessage")
 					.replace("%server%", (CONFIG.multiServer.enable ? CONFIG.multiServer.name : "Discord"))
 					.replace("%message%", ""));
 
@@ -103,15 +95,11 @@ public class DiscordEventListener extends ListenerAdapter {
 					.replace("%roleColor%", String.format("#%06X", (0xFFFFFF & e.getMember().getColorRaw())))
 					.replace("%command%", e.getCommandString())));
 
-			SERVER.getPlayerList().getPlayers().forEach(
-					player -> player.displayClientMessage(commandNoticeText, false));
+			SERVER.getPlayerManager().getPlayerList().forEach(
+					player -> player.sendMessage(commandNoticeText, false));
 
 			if (CONFIG.multiServer.enable) {
-				//#if MC >= 12005
-				MULTI_SERVER.sendMessage(false, false, true, null, Component.Serializer.toJson(commandNoticeText, RegistryAccess.EMPTY));
-				//#else
-				//$$ MULTI_SERVER.sendMessage(false, false, true, null, Component.Serializer.toJson(commandNoticeText));
-				//#endif
+				MULTI_SERVER.sendMessage(false, false, true, null, Text.Serialization.toJsonString(commandNoticeText, DynamicRegistryManager.EMPTY));
 			}
 		}
 
@@ -143,24 +131,14 @@ public class DiscordEventListener extends ListenerAdapter {
 					if ("stop".equals(command) || "/stop".equals(command)) {
 						e.getHook().sendMessage(Translations.translate("discord.deListener.oscInteraction.stoppingServer"))
 								.submit()
-								.whenComplete((v, ex) -> SERVER.halt(false));
+								.whenComplete((v, ex) -> SERVER.stop(false));
 					} else {
 						e.getHook().sendMessage(Translations.translate("discord.deListener.oscInteraction.executingCommand"))
 								.submit()
 								.whenComplete((v, ex) -> {
-									//#if MC >= 11900
-									CommandSourceStack source = new CommandSourceStack(new DiscordCommandSource(e), Vec3.ZERO, Vec2.ZERO, SERVER.overworld(), 4, "Discord-MC-Chat", Component.literal("Discord-MC-Chat"), SERVER, null);
-									//#elseif MC > 11502
-									//$$ CommandSourceStack source = new CommandSourceStack(new DiscordCommandSource(e), Vec3.ZERO, Vec2.ZERO, SERVER.overworld(), 4, "Discord-MC-Chat", new TextComponent("Discord-MC-Chat"), SERVER, null);
-									//#else
-									//$$ CommandSourceStack source = new CommandSourceStack(new DiscordCommandSource(e), Vec3.ZERO, Vec2.ZERO, SERVER.getLevel(DimensionType.OVERWORLD), 4, "Discord-MC-Chat", new TextComponent("Discord-MC-Chat"), SERVER, null);
-									//#endif
-									//#if MC > 11900
-									ParseResults<CommandSourceStack> results = SERVER.getCommands().getDispatcher().parse(command, source);
-									SERVER.getCommands().performCommand(results, command);
-									//#else
-									//$$ SERVER.getCommands().performCommand(source, command);
-									//#endif
+									ServerCommandSource source = new ServerCommandSource(new DiscordCommandSource(e), Vec3d.ZERO, Vec2f.ZERO, SERVER.getOverworld(), 4, "Discord-MC-Chat", Text.literal("Discord-MC-Chat"), SERVER, null);
+									ParseResults<ServerCommandSource> results = SERVER.getCommandManager().getDispatcher().parse(command, source);
+									SERVER.getCommandManager().execute(results, command);
 								});
 					}
 				} else {
@@ -206,7 +184,7 @@ public class DiscordEventListener extends ListenerAdapter {
 				if (Utils.isAdmin(e.getMember())) {
 					e.getHook().sendMessage(Translations.translate("discord.deListener.oscInteraction.stoppingServer"))
 							.submit()
-							.whenComplete((v, ex) -> SERVER.halt(false));
+							.whenComplete((v, ex) -> SERVER.stop(false));
 				} else {
 					e.getHook().sendMessage(Translations.translate("discord.deListener.oscInteraction.noPermission")).queue();
 				}
@@ -233,7 +211,7 @@ public class DiscordEventListener extends ListenerAdapter {
 
 			e.replyChoices(options).queue();
 		} else if ("console".equals(e.getName()) && "command".equals(e.getFocusedOption().getName())) {
-			CommandDispatcher<CommandSourceStack> dispatcher = SERVER.getCommands().getDispatcher();
+			CommandDispatcher<ServerCommandSource> dispatcher = SERVER.getCommandManager().getDispatcher();
 
 			try {
 				String input = e.getFocusedOption().getValue();
@@ -243,12 +221,12 @@ public class DiscordEventListener extends ListenerAdapter {
 
 				List<String> temp = new ArrayList<>();
 
-				ParseResults<CommandSourceStack> results = dispatcher.parse(input, SERVER.createCommandSourceStack());
+				ParseResults<ServerCommandSource> results = dispatcher.parse(input, SERVER.getCommandSource());
 				Suggestions suggestions = dispatcher.getCompletionSuggestions(results).get();
 
 				int size = results.getContext().getNodes().size();
 				if (size > 0) {
-					Map<CommandNode<CommandSourceStack>, String> map = dispatcher.getSmartUsage(results.getContext().getNodes().get(size - 1).getNode(), SERVER.createCommandSourceStack());
+					Map<CommandNode<ServerCommandSource>, String> map = dispatcher.getSmartUsage(results.getContext().getNodes().get(size - 1).getNode(), SERVER.getCommandSource());
 
 					for (String string : map.values()) {
 						temp.add((string.length() > 100) ? string.substring(0, 99) : string);
@@ -374,7 +352,7 @@ public class DiscordEventListener extends ListenerAdapter {
 						referencedMessage.append(" ");
 					}
 					for (Message.Attachment attachment : e.getMessage().getReferencedMessage().getAttachments()) {
-						referencedMessage.append(ChatFormatting.YELLOW).append(attachment.isSpoiler() ? "<SPOILER_" : "<");
+						referencedMessage.append(Formatting.YELLOW).append(attachment.isSpoiler() ? "<SPOILER_" : "<");
 						if (attachment.isImage()) {
 							referencedMessage.append("image>");
 						} else if (attachment.isVideo()) {
@@ -390,7 +368,7 @@ public class DiscordEventListener extends ListenerAdapter {
 						referencedMessage.append(" ");
 					}
 					for (int i = 0; i < e.getMessage().getReferencedMessage().getStickers().size(); i++) {
-						referencedMessage.append(ChatFormatting.YELLOW).append("<sticker>");
+						referencedMessage.append(Formatting.YELLOW).append("<sticker>");
 					}
 				}
 
@@ -399,7 +377,7 @@ public class DiscordEventListener extends ListenerAdapter {
 					for (String emojiName : emojiNames) {
 						List<RichCustomEmoji> emojis = JDA.getEmojisByName(emojiName, true);
 						if (!emojis.isEmpty() || EmojiManager.getByAlias(emojiName).isPresent()) {
-							referencedMessage = new StringBuilder(StringUtils.replaceIgnoreCase(referencedMessage.toString(), (":" + emojiName + ":"), (ChatFormatting.YELLOW + ":" + emojiName + ":" + ChatFormatting.RESET)));
+							referencedMessage = new StringBuilder(StringUtils.replaceIgnoreCase(referencedMessage.toString(), (":" + emojiName + ":"), (Formatting.YELLOW + ":" + emojiName + ":" + Formatting.RESET)));
 						}
 					}
 				}
@@ -410,7 +388,7 @@ public class DiscordEventListener extends ListenerAdapter {
 					for (Member member : CHANNEL.getMembers()) {
 						String usernameMention = "@" + member.getUser().getName();
 						String displayNameMention = "@" + member.getUser().getEffectiveName();
-						String formattedMention = ChatFormatting.YELLOW + "@" + member.getEffectiveName() + ChatFormatting.RESET;
+						String formattedMention = Formatting.YELLOW + "@" + member.getEffectiveName() + Formatting.RESET;
 						temp = StringUtils.replaceIgnoreCase(temp, usernameMention, MarkdownSanitizer.escape(formattedMention));
 						temp = StringUtils.replaceIgnoreCase(temp, displayNameMention, MarkdownSanitizer.escape(formattedMention));
 
@@ -421,11 +399,11 @@ public class DiscordEventListener extends ListenerAdapter {
 					}
 					for (Role role : CHANNEL.getGuild().getRoles()) {
 						String roleMention = "@" + role.getName();
-						String formattedMention = ChatFormatting.YELLOW + "@" + role.getName() + ChatFormatting.RESET;
+						String formattedMention = Formatting.YELLOW + "@" + role.getName() + Formatting.RESET;
 						temp = StringUtils.replaceIgnoreCase(temp, roleMention, MarkdownSanitizer.escape(formattedMention));
 					}
-					temp = StringUtils.replaceIgnoreCase(temp, "@everyone", ChatFormatting.YELLOW + "@everyone" + ChatFormatting.RESET);
-					temp = StringUtils.replaceIgnoreCase(temp, "@here", ChatFormatting.YELLOW + "@here" + ChatFormatting.RESET);
+					temp = StringUtils.replaceIgnoreCase(temp, "@everyone", Formatting.YELLOW + "@everyone" + Formatting.RESET);
+					temp = StringUtils.replaceIgnoreCase(temp, "@here", Formatting.YELLOW + "@here" + Formatting.RESET);
 
 					referencedMessage = new StringBuilder(temp);
 				}
@@ -463,7 +441,7 @@ public class DiscordEventListener extends ListenerAdapter {
 					message.append(" ");
 				}
 				for (Message.Attachment attachment : e.getMessage().getAttachments()) {
-					message.append(ChatFormatting.YELLOW).append(attachment.isSpoiler() ? "<SPOILER_" : "<");
+					message.append(Formatting.YELLOW).append(attachment.isSpoiler() ? "<SPOILER_" : "<");
 					if (attachment.isImage()) {
 						message.append("image>");
 					} else if (attachment.isVideo()) {
@@ -479,7 +457,7 @@ public class DiscordEventListener extends ListenerAdapter {
 					message.append(" ");
 				}
 				for (int i = 0; i < e.getMessage().getStickers().size(); i++) {
-					message.append(ChatFormatting.YELLOW).append("<sticker>");
+					message.append(Formatting.YELLOW).append("<sticker>");
 				}
 			}
 
@@ -488,7 +466,7 @@ public class DiscordEventListener extends ListenerAdapter {
 				for (String emojiName : emojiNames) {
 					List<RichCustomEmoji> emojis = JDA.getEmojisByName(emojiName, true);
 					if (!emojis.isEmpty() || EmojiManager.getByAlias(emojiName).isPresent()) {
-						message = new StringBuilder(StringUtils.replaceIgnoreCase(message.toString(), (":" + emojiName + ":"), (ChatFormatting.YELLOW + ":" + MarkdownSanitizer.escape(emojiName) + ":" + ChatFormatting.RESET)));
+						message = new StringBuilder(StringUtils.replaceIgnoreCase(message.toString(), (":" + emojiName + ":"), (Formatting.YELLOW + ":" + MarkdownSanitizer.escape(emojiName) + ":" + Formatting.RESET)));
 					}
 				}
 			}
@@ -499,7 +477,7 @@ public class DiscordEventListener extends ListenerAdapter {
 				for (Member member : CHANNEL.getMembers()) {
 					String usernameMention = "@" + member.getUser().getName();
 					String displayNameMention = "@" + member.getUser().getEffectiveName();
-					String formattedMention = ChatFormatting.YELLOW + "@" + member.getEffectiveName() + ChatFormatting.RESET;
+					String formattedMention = Formatting.YELLOW + "@" + member.getEffectiveName() + Formatting.RESET;
 					temp = StringUtils.replaceIgnoreCase(temp, usernameMention, MarkdownSanitizer.escape(formattedMention));
 					temp = StringUtils.replaceIgnoreCase(temp, displayNameMention, MarkdownSanitizer.escape(formattedMention));
 
@@ -510,11 +488,11 @@ public class DiscordEventListener extends ListenerAdapter {
 				}
 				for (Role role : CHANNEL.getGuild().getRoles()) {
 					String roleMention = "@" + role.getName();
-					String formattedMention = ChatFormatting.YELLOW + "@" + role.getName() + ChatFormatting.RESET;
+					String formattedMention = Formatting.YELLOW + "@" + role.getName() + Formatting.RESET;
 					temp = StringUtils.replaceIgnoreCase(temp, roleMention, MarkdownSanitizer.escape(formattedMention));
 				}
-				temp = StringUtils.replaceIgnoreCase(temp, "@everyone", ChatFormatting.YELLOW + "@everyone" + ChatFormatting.RESET);
-				temp = StringUtils.replaceIgnoreCase(temp, "@here", ChatFormatting.YELLOW + "@here" + ChatFormatting.RESET);
+				temp = StringUtils.replaceIgnoreCase(temp, "@everyone", Formatting.YELLOW + "@everyone" + Formatting.RESET);
+				temp = StringUtils.replaceIgnoreCase(temp, "@here", Formatting.YELLOW + "@here" + Formatting.RESET);
 
 				message = new StringBuilder(temp);
 			}
@@ -548,7 +526,7 @@ public class DiscordEventListener extends ListenerAdapter {
 		if (CONFIG.generic.broadcastChatMessages) {
 			if (e.getMessage().getReferencedMessage() != null) {
 				String s = Translations.translateMessage("message.formattedResponseMessage");
-				MutableComponent referenceFinalText = Utils.fromJson(s
+				MutableText referenceFinalText = Utils.fromJson(s
 						.replace("%message%", (CONFIG.generic.formatChatMessages ? finalReferencedMessage : EmojiManager.replaceAllEmojis(referencedMessageTemp, emoji -> emoji.getDiscordAliases().getFirst()).replace("\"", "\\\""))
 								.replace("\n", "\n" + textAfterPlaceholder[0] + "}," + s.substring(1, s.indexOf("%message%"))))
 						.replace("%server%", "Discord")
@@ -556,12 +534,12 @@ public class DiscordEventListener extends ListenerAdapter {
 						.replace("%roleName%", referencedMemberRoleName)
 						.replace("%roleColor%", String.format("#%06X", (0xFFFFFF & ((referencedMember != null) ? referencedMember.getColorRaw() : Role.DEFAULT_COLOR_RAW)))));
 
-				SERVER.getPlayerList().getPlayers().forEach(
-						player -> player.displayClientMessage(referenceFinalText, false));
+				SERVER.getPlayerManager().getPlayerList().forEach(
+						player -> player.sendMessage(referenceFinalText, false));
 			}
 
 			String s = Translations.translateMessage("message.formattedChatMessage");
-			MutableComponent finalText = Utils.fromJson(s
+			MutableText finalText = Utils.fromJson(s
 					.replace("%message%", (CONFIG.generic.formatChatMessages ? finalMessage : EmojiManager.replaceAllEmojis(messageTemp, emoji -> emoji.getDiscordAliases().getFirst()).replace("\"", "\\\""))
 							.replace("\n", "\n" + textAfterPlaceholder[1] + "}," + s.substring(1, s.indexOf("%message%"))))
 					.replace("%server%", "Discord")
@@ -569,8 +547,8 @@ public class DiscordEventListener extends ListenerAdapter {
 					.replace("%roleName%", memberRoleName)
 					.replace("%roleColor%", String.format("#%06X", (0xFFFFFF & e.getMember().getColorRaw()))));
 
-			SERVER.getPlayerList().getPlayers().forEach(
-					player -> player.displayClientMessage(finalText, false));
+			SERVER.getPlayerManager().getPlayerList().forEach(
+					player -> player.sendMessage(finalText, false));
 		}
 	}
 }

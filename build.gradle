@@ -1,35 +1,186 @@
 plugins {
-	id "fabric-loom" version "1.7-SNAPSHOT" apply false
-	id "com.replaymod.preprocess" version "88169fcb"
+	id 'fabric-loom' version '1.7-SNAPSHOT'
+	id 'maven-publish'
 }
 
-preprocess {
-	def mc1152 = createNode("compat_1.15.2", 1_15_02, "mojang")
-	def mc1165 = createNode("compat_1.16.5", 1_16_05, "mojang")
-	def mc1171 = createNode("compat_1.17.1", 1_17_01, "mojang")
-	def mc1182 = createNode("compat_1.18.2", 1_18_02, "mojang")
-	def mc1190 = createNode("compat_1.19"  , 1_19_00, "mojang")
-	def mc1192 = createNode("compat_1.19.2", 1_19_02, "mojang")
-	def mc1193 = createNode("compat_1.19.3", 1_19_03, "mojang")
-	def mc1194 = createNode("1.19.4", 1_19_04, "mojang")
-	def mc1201 = createNode("1.20.1", 1_20_01, "mojang")
-	def mc1202 = createNode("1.20.2", 1_20_02, "mojang")
-	def mc1204 = createNode("1.20.4", 1_20_04, "mojang")
-	def mc1211 = createNode("1.21.1"  , 1_21_01, "mojang")
+version = project.mod_version
+group = project.maven_group
 
-	mc1152.link(mc1165, file("versions/mapping-1.15.2-1.16.5.txt"))
-	mc1165.link(mc1171, null)
-	mc1171.link(mc1182, null)
-	mc1182.link(mc1190, null)
-	mc1190.link(mc1192, null)
-	mc1192.link(mc1193, file("versions/mapping-1.19.2-1.19.3.txt"))
-	mc1193.link(mc1194, null)
-	mc1194.link(mc1201, null)
-	mc1201.link(mc1202, file("versions/mapping-1.20.1-1.20.2.txt"))
-	mc1202.link(mc1204, null)
-	mc1204.link(mc1211, null)
+ext {
+	pass = findProperty('pass') ?: ''
 }
 
-project.afterEvaluate {
-	delete file("build")
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"discord-mc-chat-extended" {
+			sourceSet sourceSets.main
+//			sourceSet sourceSets.client
+		}
+	}
 }
+
+// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+repositories {
+	maven {
+		name = "Nucleoid"
+		url = "https://maven.nucleoid.xyz/"
+	}
+	maven { url = 'https://maven.shedaniel.me/' }
+	maven { url = "https://maven.terraformersmc.com/releases/" }
+	maven {
+			name = "Jitpack"
+			url = "https://jitpack.io"
+	}
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
+	mappings "net.fabricmc:yarn:${project.fabric_yarn_mappings}:v2"
+	modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+//	modImplementation "eu.pb4:placeholder-api:${project.placeholderapi_version}"
+//	modImplementation("com.terraformersmc:modmenu:${project.modmenu_version}")
+//	modApi("me.shedaniel.cloth:cloth-config-fabric:${project.clothconfig_version}") {
+//		exclude(group: 'net.fabricmc.fabric-api')
+//	}
+
+	modImplementation("net.dv8tion:JDA:5.1.0") {
+		exclude module: "opus-java"
+	}
+	modImplementation("net.sf.trove4j:core:3.1.0")
+	modImplementation("org.apache.commons:commons-collections4:4.4")
+	modImplementation("org.slf4j:slf4j-api:2.0.13") // 1.x is Incompatible with Quilt (#164)
+	modImplementation("com.neovisionaries:nv-websocket-client:2.14")
+	modImplementation("com.fasterxml.jackson.core:jackson-core:2.17.2")
+	modImplementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
+	modImplementation("com.fasterxml.jackson.core:jackson-annotations:2.17.2")
+	modImplementation("com.squareup.okhttp3:okhttp:4.12.0")
+	modImplementation("com.squareup.okio:okio-jvm:3.6.0")
+	modImplementation("org.jetbrains.kotlin:kotlin-stdlib:1.8.21")
+
+	modImplementation("net.fellbaum:jemoji:1.3.4") // File size of 1.4.x is too big
+
+	modImplementation("com.google.code.gson:gson:2.11.0")
+}
+
+processResources {
+	inputs.property "version", project.version
+	inputs.property "minecraft_version", project.minecraft_version
+	inputs.property "loader_version", project.fabric_loader_version
+	filteringCharset "UTF-8"
+
+	filesMatching("fabric.mod.json") {
+		expand "version": project.version,
+				"minecraft_version": project.minecraft_version,
+				"loader_version": project.fabric_loader_version
+	}
+}
+
+def targetJavaVersion = 21
+tasks.withType(JavaCompile).configureEach {
+	// ensure that the encoding is set to UTF-8, no matter what the system default is
+	// this fixes some edge cases with special characters not displaying correctly
+	// see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
+	// If Javadoc is generated, this must be specified in that task too.
+	it.options.encoding = "UTF-8"
+	if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+		it.options.release.set(targetJavaVersion)
+	}
+}
+
+//shadowJar {
+//    configurations = [project.configurations.shadowCommon]
+//    classifier "shadow"
+//}
+
+//remapJar {
+//    input.set(shadowJar.archiveFile)
+//    dependsOn(shadowJar)
+//    archiveClassifier = "fabric"
+//
+//    from rootProject.file("LICENSE.txt")
+//}
+
+java {
+	def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+	if (JavaVersion.current() < javaVersion) {
+		toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+	}
+	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+	// if it is present.
+	// If you remove this line, sources will not be generated.
+	withSourcesJar()
+}
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_${project.archivesBaseName}"}
+	}
+}
+
+// configure the maven publication
+publishing {
+	repositories {
+		maven {
+			name = "GitHubPackages"
+			url = 'https://maven.pkg.github.com/kochkaev/seasons-api'
+			credentials {
+				username = "kochkaev"
+				password = pass
+			}
+
+		}
+	}
+	publications {
+		gpr(MavenPublication) {
+			from(components.java)
+		}
+	}
+
+}
+
+//preprocess {
+//	def mc1152 = createNode("compat_1.15.2", 1_15_02, "mojang")
+//	def mc1165 = createNode("compat_1.16.5", 1_16_05, "mojang")
+//	def mc1171 = createNode("compat_1.17.1", 1_17_01, "mojang")
+//	def mc1182 = createNode("compat_1.18.2", 1_18_02, "mojang")
+//	def mc1190 = createNode("compat_1.19"  , 1_19_00, "mojang")
+//	def mc1192 = createNode("compat_1.19.2", 1_19_02, "mojang")
+//	def mc1193 = createNode("compat_1.19.3", 1_19_03, "mojang")
+//	def mc1194 = createNode("1.19.4", 1_19_04, "mojang")
+//	def mc1201 = createNode("1.20.1", 1_20_01, "mojang")
+//	def mc1202 = createNode("1.20.2", 1_20_02, "mojang")
+//	def mc1204 = createNode("1.20.4", 1_20_04, "mojang")
+//	def mc1211 = createNode("1.21.1"  , 1_21_01, "mojang")
+//
+//	mc1152.link(mc1165, file("versions/mapping-1.15.2-1.16.5.txt"))
+//	mc1165.link(mc1171, null)
+//	mc1171.link(mc1182, null)
+//	mc1182.link(mc1190, null)
+//	mc1190.link(mc1192, null)
+//	mc1192.link(mc1193, file("versions/mapping-1.19.2-1.19.3.txt"))
+//	mc1193.link(mc1194, null)
+//	mc1194.link(mc1201, null)
+//	mc1201.link(mc1202, file("versions/mapping-1.20.1-1.20.2.txt"))
+//	mc1202.link(mc1204, null)
+//	mc1204.link(mc1211, null)
+//}
+
+//project.afterEvaluate {
+//	delete file("build")
+//}

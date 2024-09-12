@@ -7,7 +7,7 @@ import com.xujiayao.discord_mc_chat.utils.MarkdownParser;
 import com.xujiayao.discord_mc_chat.utils.Translations;
 import com.xujiayao.discord_mc_chat.utils.Utils;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
-import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.text.MutableText;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 
@@ -57,8 +57,8 @@ public class ReadThread extends Thread {
 							Objects.requireNonNull(channel).sendMessage("```\n" + Utils.getInfoCommandMessage() + "\n```").queue();
 						} else if ("updateChannelTopic".equals(message.get("type").getAsString())) {
 							JsonObject channelTopicInfo = new JsonObject();
-							channelTopicInfo.addProperty("onlinePlayerCount", SERVER.getPlayerCount());
-							channelTopicInfo.addProperty("maxPlayerCount", SERVER.getMaxPlayers());
+							channelTopicInfo.addProperty("onlinePlayerCount", SERVER.getCurrentPlayerCount());
+							channelTopicInfo.addProperty("maxPlayerCount", SERVER.getCurrentPlayerCount());
 
 							Properties properties = new Properties();
 							properties.load(new FileInputStream("server.properties"));
@@ -85,39 +85,39 @@ public class ReadThread extends Thread {
 								.replace("%name%", json.get("playerName").getAsString())
 								.replace("%message%", json.get("message").getAsString()));
 
-						MutableComponent text = Utils.fromJson(Translations.translateMessage("message.formattedChatMessage")
+						MutableText text = Utils.fromJson(Translations.translateMessage("message.formattedChatMessage")
 								.replace("%server%", json.get("serverName").getAsString())
 								.replace("%name%", json.get("playerName").getAsString())
 								.replace("%roleColor%", "white")
 								.replace("%message%", MarkdownParser.parseMarkdown(json.get("message").getAsString())));
 
-						SERVER.getPlayerList().getPlayers().forEach(
-								player -> player.displayClientMessage(text, false));
+						SERVER.getPlayerManager().getPlayerList().forEach(
+								player -> player.sendMessage(text, false));
 					} else {
 						if (json.get("isText").getAsBoolean()) {
 							LOGGER.info(Translations.translateMessage("message.unformattedOtherMessage")
 									.replace("%server%", json.get("serverName").getAsString())
 									.replace("%message%", Objects.requireNonNull(Utils.fromJson(json.get("message").getAsString())).getString()));
 
-							MutableComponent text = Utils.fromJson(Translations.translateMessage("message.formattedOtherMessage")
+							MutableText text = Utils.fromJson(Translations.translateMessage("message.formattedOtherMessage")
 									.replace("%server%", json.get("serverName").getAsString())
 									.replace("%message%", ""));
 
 							Objects.requireNonNull(text).append(Utils.fromJson(json.get("message").getAsString()));
 
-							SERVER.getPlayerList().getPlayers().forEach(
-									player -> player.displayClientMessage(text, false));
+							SERVER.getPlayerManager().getPlayerList().forEach(
+									player -> player.sendMessage(text, false));
 						} else {
 							LOGGER.info(Translations.translateMessage("message.unformattedOtherMessage")
 									.replace("%server%", json.get("serverName").getAsString())
 									.replace("%message%", json.get("message").getAsString()));
 
-							MutableComponent text = Utils.fromJson(Translations.translateMessage("message.formattedOtherMessage")
+							MutableText text = Utils.fromJson(Translations.translateMessage("message.formattedOtherMessage")
 									.replace("%server%", json.get("serverName").getAsString())
 									.replace("%message%", MarkdownParser.parseMarkdown(json.get("message").getAsString())));
 
-							SERVER.getPlayerList().getPlayers().forEach(
-									player -> player.displayClientMessage(text, false));
+							SERVER.getPlayerManager().getPlayerList().forEach(
+									player -> player.sendMessage(text, false));
 						}
 					}
 				} catch (Exception e) {
