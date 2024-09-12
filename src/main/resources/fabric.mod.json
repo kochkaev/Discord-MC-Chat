@@ -24,7 +24,7 @@
 		"discord-mc-chat.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.15.10",
+		"fabricloader": ">=${loader_version}",
 		"java": ">=21"
 	}
 }

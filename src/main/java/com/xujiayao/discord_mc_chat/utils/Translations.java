@@ -40,7 +40,7 @@ public class Translations {
 	public static void init() {
 		translations = new HashMap<>();
 
-		Optional<Path> optional = FabricLoader.getInstance().getModContainer("discord-mc-chat").orElseThrow()
+		Optional<Path> optional = FabricLoader.getInstance().getModContainer("discord-mc-chat-extended").orElseThrow()
 				.findPath("/lang/" + CONFIG.generic.language + ".json");
 
 		if (optional.isEmpty()) {

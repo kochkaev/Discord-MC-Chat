@@ -114,6 +114,21 @@ public class Config {
 
 	@SuppressWarnings("unused")
 	public static class Extended {
+		public HideActivityOfSomePlayers hideActivityOfSomePlayers = new HideActivityOfSomePlayers();
+
+		public boolean disableMinecraftMessagesFormattingInChat = false;
+		public boolean disableDiscordMessagesFormattingInChat = false;
+
+		public static class HideActivityOfSomePlayers {
+			public boolean enable = false;
+			public List<String> hiddenPlayersNicknames = new ArrayList<>();
+
+			public boolean hidePlayerCommandExecution = true;
+			public boolean hideJoinLeave = true;
+			public boolean hideDeathMessages = true;
+			public boolean hideAdvancements = true;
+			public boolean hideChatMessages = true;
+		}
 
 	}
 }

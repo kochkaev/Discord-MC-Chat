@@ -164,11 +164,7 @@ public class Main implements DedicatedServerModInitializer {
 			MULTI_SERVER.start();
 		}
 
-		//#if MC >= 11900
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> MinecraftCommands.register(dispatcher));
-		//#else
-		//$$ CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> MinecraftCommands.register(dispatcher));
-		//#endif
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SERVER_STARTED_TIME = Long.toString(Instant.now().getEpochSecond());

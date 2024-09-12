@@ -55,13 +55,8 @@ public class MinecraftEventListener {
 			String avatarUrl;
 
 			// TODO May directly link to PLAYER_MESSAGE
-			//#if MC > 11802
 			if (commandSourceStack.isExecutedByPlayer()) {
 				avatarUrl = getAvatarUrl(commandSourceStack.getPlayer());
-			//#else
-			//$$ if (commandSourceStack.getEntity() instanceof ServerPlayer) {
-			//$$ 	avatarUrl = getAvatarUrl((ServerPlayer) commandSourceStack.getEntity());
-			//#endif
 			} else {
 				avatarUrl = JDA.getSelfUser().getAvatarUrl();
 			}
@@ -166,14 +161,17 @@ public class MinecraftEventListener {
 				}
 			}
 
-			if (CONFIG.generic.broadcastChatMessages) {
+			if (CONFIG.generic.broadcastChatMessages
+					&& !(CONFIG.extended.hideActivityOfSomePlayers.enable
+					&& CONFIG.extended.hideActivityOfSomePlayers.hideChatMessages
+					&& CONFIG.extended.hideActivityOfSomePlayers.hiddenPlayersNicknames.contains(player.getName().getString()))) {
 				sendDiscordMessage(contentToDiscord, Objects.requireNonNull(player.getDisplayName()).getString(), getAvatarUrl(player));
 				if (CONFIG.multiServer.enable) {
 					MULTI_SERVER.sendMessage(false, true, false, Objects.requireNonNull(player.getDisplayName()).getString(), CONFIG.generic.formatChatMessages ? contentToMinecraft : message);
 				}
 			}
 
-			if (CONFIG.generic.formatChatMessages) {
+			if (CONFIG.generic.formatChatMessages && !CONFIG.extended.disableMinecraftMessagesFormattingInChat) {
 				return Optional.ofNullable(Utils.fromJson("[{\"text\":\"" + contentToMinecraft + "\"}]"));
 			} else {
 				return Optional.empty();
@@ -181,7 +179,10 @@ public class MinecraftEventListener {
 		});
 
 		MinecraftEvents.PLAYER_COMMAND.register((player, command) -> {
-			if (CONFIG.generic.broadcastPlayerCommandExecution) {
+			if (CONFIG.generic.broadcastPlayerCommandExecution
+					&& !(CONFIG.extended.hideActivityOfSomePlayers.enable
+					&& CONFIG.extended.hideActivityOfSomePlayers.hidePlayerCommandExecution
+					&& CONFIG.extended.hideActivityOfSomePlayers.hiddenPlayersNicknames.contains(player.getName().getString()))) {
 				for (String excludedCommand : CONFIG.generic.excludedCommands) {
 					if (command.matches(excludedCommand)) {
 						return;
@@ -210,22 +211,18 @@ public class MinecraftEventListener {
 		});
 
 		MinecraftEvents.PLAYER_ADVANCEMENT.register((player, advancementHolder, isDone) -> {
-			//#if MC >= 12002
 			if (advancementHolder.value().display().isEmpty()) {
 				return;
 			}
 			AdvancementDisplay display = advancementHolder.value().display().get();
-			//#else
-			//$$ if (advancementHolder.getDisplay() == null) {
-			//$$ 	return;
-			//$$ }
-			//$$ DisplayInfo display = advancementHolder.getDisplay();
-			//#endif
 
 			if (CONFIG.generic.announceAdvancements
 					&& isDone
 					&& display.shouldAnnounceToChat()
-					&& player.getWorld().getGameRules().getBoolean(GameRules.ANNOUNCE_ADVANCEMENTS)) {
+					&& player.getWorld().getGameRules().getBoolean(GameRules.ANNOUNCE_ADVANCEMENTS)
+					&& !(CONFIG.extended.hideActivityOfSomePlayers.enable
+							&& CONFIG.extended.hideActivityOfSomePlayers.hideAdvancements
+							&& CONFIG.extended.hideActivityOfSomePlayers.hiddenPlayersNicknames.contains(player.getName().getString()))) {
 				String message = "null";
 
 				switch (display.getFrame()) {
@@ -250,12 +247,11 @@ public class MinecraftEventListener {
 		});
 
 		MinecraftEvents.PLAYER_DIE.register(player -> {
-			if (CONFIG.generic.announceDeathMessages) {
-				//#if MC >= 11900
+			if (CONFIG.generic.announceDeathMessages
+					&& !(CONFIG.extended.hideActivityOfSomePlayers.enable
+					&& CONFIG.extended.hideActivityOfSomePlayers.hideDeathMessages
+					&& CONFIG.extended.hideActivityOfSomePlayers.hiddenPlayersNicknames.contains(player.getName().getString()))) {
 				TranslatableTextContent deathMessage = (TranslatableTextContent) player.getDamageTracker().getDeathMessage().getContent();
-				//#else
-				//$$ TranslatableText deathMessage = (TranslatableText) player.getCombatTracker().getDeathMessage();
-				//#endif
 				String key = deathMessage.getKey();
 
 				CHANNEL.sendMessage(Translations.translateMessage("message.deathMessage")
@@ -272,7 +268,10 @@ public class MinecraftEventListener {
 		MinecraftEvents.PLAYER_JOIN.register(player -> {
 			Utils.setBotPresence();
 
-			if (CONFIG.generic.announcePlayerJoinLeave) {
+			if (CONFIG.generic.announcePlayerJoinLeave
+					&& !(CONFIG.extended.hideActivityOfSomePlayers.enable
+					&& CONFIG.extended.hideActivityOfSomePlayers.hideJoinLeave
+					&& CONFIG.extended.hideActivityOfSomePlayers.hiddenPlayersNicknames.contains(player.getName().getString()))) {
 				CHANNEL.sendMessage(Translations.translateMessage("message.joinServer")
 						.replace("%playerName%", MarkdownSanitizer.escape(Objects.requireNonNull(player.getDisplayName()).getString()))).queue();
 				if (CONFIG.multiServer.enable) {
@@ -285,7 +284,10 @@ public class MinecraftEventListener {
 		MinecraftEvents.PLAYER_QUIT.register(player -> {
 			Utils.setBotPresence();
 
-			if (CONFIG.generic.announcePlayerJoinLeave) {
+			if (CONFIG.generic.announcePlayerJoinLeave
+					&& !(CONFIG.extended.hideActivityOfSomePlayers.enable
+					&& CONFIG.extended.hideActivityOfSomePlayers.hideJoinLeave
+					&& CONFIG.extended.hideActivityOfSomePlayers.hiddenPlayersNicknames.contains(player.getName().getString()))) {
 				CHANNEL.sendMessage(Translations.translateMessage("message.leftServer")
 						.replace("%playerName%", MarkdownSanitizer.escape(Objects.requireNonNull(player.getDisplayName()).getString()))).queue();
 				if (CONFIG.multiServer.enable) {
@@ -347,11 +349,7 @@ public class MinecraftEventListener {
 		String hash = "null";
 		if (CONFIG.generic.avatarApi.contains("{player_textures}")) {
 			try {
-				//#if MC > 12001
 				String textures = player.getGameProfile().getProperties().get("textures").iterator().next().value();
-				//#else
-				//$$ String textures = player.getGameProfile().getProperties().get("textures").iterator().next().getValue();
-				//#endif
 
 				JsonObject json = new Gson().fromJson(new String(Base64.getDecoder().decode(textures), StandardCharsets.UTF_8), JsonObject.class);
 				String url = json.getAsJsonObject("textures").getAsJsonObject("SKIN").get("url").getAsString();

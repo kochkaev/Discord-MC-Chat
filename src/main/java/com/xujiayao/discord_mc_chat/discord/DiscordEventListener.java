@@ -341,7 +341,7 @@ public class DiscordEventListener extends ListenerAdapter {
 		String finalReferencedMessage = "";
 		String finalMessage = "";
 
-		if (CONFIG.generic.formatChatMessages) {
+		if (CONFIG.generic.formatChatMessages && !CONFIG.extended.disableDiscordMessagesFormattingInChat) {
 			StringBuilder referencedMessage;
 
 			if (e.getMessage().getReferencedMessage() != null) {
@@ -527,7 +527,7 @@ public class DiscordEventListener extends ListenerAdapter {
 			if (e.getMessage().getReferencedMessage() != null) {
 				String s = Translations.translateMessage("message.formattedResponseMessage");
 				MutableText referenceFinalText = Utils.fromJson(s
-						.replace("%message%", (CONFIG.generic.formatChatMessages ? finalReferencedMessage : EmojiManager.replaceAllEmojis(referencedMessageTemp, emoji -> emoji.getDiscordAliases().getFirst()).replace("\"", "\\\""))
+						.replace("%message%", ((CONFIG.generic.formatChatMessages && !CONFIG.extended.disableDiscordMessagesFormattingInChat) ? finalReferencedMessage : EmojiManager.replaceAllEmojis(referencedMessageTemp, emoji -> emoji.getDiscordAliases().getFirst()).replace("\"", "\\\""))
 								.replace("\n", "\n" + textAfterPlaceholder[0] + "}," + s.substring(1, s.indexOf("%message%"))))
 						.replace("%server%", "Discord")
 						.replace("%name%", (referencedMember != null) ? (CONFIG.generic.useServerNickname ? referencedMember.getEffectiveName() : referencedMember.getUser().getName()).replace("\\", "\\\\").replace("\"", "\\\"") : webhookName)
@@ -540,7 +540,7 @@ public class DiscordEventListener extends ListenerAdapter {
 
 			String s = Translations.translateMessage("message.formattedChatMessage");
 			MutableText finalText = Utils.fromJson(s
-					.replace("%message%", (CONFIG.generic.formatChatMessages ? finalMessage : EmojiManager.replaceAllEmojis(messageTemp, emoji -> emoji.getDiscordAliases().getFirst()).replace("\"", "\\\""))
+					.replace("%message%", ((CONFIG.generic.formatChatMessages && !CONFIG.extended.disableDiscordMessagesFormattingInChat) ? finalMessage : EmojiManager.replaceAllEmojis(messageTemp, emoji -> emoji.getDiscordAliases().getFirst()).replace("\"", "\\\""))
 							.replace("\n", "\n" + textAfterPlaceholder[1] + "}," + s.substring(1, s.indexOf("%message%"))))
 					.replace("%server%", "Discord")
 					.replace("%name%", (CONFIG.generic.useServerNickname ? e.getMember().getEffectiveName() : e.getMember().getUser().getName()).replace("\\", "\\\\").replace("\"", "\\\""))
